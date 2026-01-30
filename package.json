@@ -1,0 +1,43 @@
+{
+  "name": "zano-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Zano blockchain - daemon, wallet, asset, swap, and trade tools",
+  "type": "module",
+  "bin": {
+    "zano-mcp": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "zano",
+    "mcp",
+    "blockchain",
+    "cryptocurrency",
+    "model-context-protocol",
+    "ionic-swap",
+    "dex"
+  ],
+  "author": "PRavaga",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PRavaga/zano-mcp.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0",
+    "@types/node": "^22.0.0"
+  }
+}
