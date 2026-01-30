@@ -22,3 +22,4 @@ export const ZANO_DECIMALS = 12;
 export const DEFAULT_MIXIN = 15;
 export const AUDITABLE_MIXIN = 0;
 export const DEFAULT_FEE = 10000000000; // 0.01 ZANO
+export const REQUEST_TIMEOUT = 30_000; // 30 seconds

@@ -20,6 +20,7 @@ export function createServer(config: Config): McpServer {
     wallet: config.walletUrl ? "configured" : "disabled",
     trade: config.tradeToken ? "authenticated" : "public only",
     network: config.network,
+    writeTools: config.enableWriteTools ? "ENABLED" : "disabled",
   });
 
   return server;
