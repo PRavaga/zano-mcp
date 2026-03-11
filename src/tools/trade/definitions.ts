@@ -9,10 +9,8 @@ export const GetOrderBookShape = {
 };
 
 export const DexAuthenticateShape = {
-  address: z.string().describe("Zano wallet address"),
-  alias: z.string().optional().describe("Zano alias (optional)"),
-  message: z.string().describe("Message that was signed"),
-  signature: z.string().describe("Signature from wallet sign_message"),
+  address: z.string().optional().describe("Zano wallet address (auto-detected from wallet if omitted)"),
+  alias: z.string().optional().describe("Zano alias (auto-detected from daemon if omitted)"),
 };
 
 export const CreateOrderShape = {

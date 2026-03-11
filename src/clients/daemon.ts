@@ -2,7 +2,7 @@ import { logger } from "../logger.js";
 import { REQUEST_TIMEOUT } from "../utils/constants.js";
 
 export class DaemonClient {
-  private url: string;
+  readonly url: string;
 
   constructor(url: string) {
     this.url = url;

@@ -1,6 +1,13 @@
 import { z } from "zod";
 
-export const GetBalanceShape = {};
+export const GetBalanceShape = {
+  detailed: z
+    .boolean()
+    .optional()
+    .describe("Include UTXO output stats (count, max, min) per asset"),
+};
+export const GetBalanceSchema = z.object(GetBalanceShape);
+export type GetBalanceInput = z.infer<typeof GetBalanceSchema>;
 export const GetAddressShape = {};
 export const GetWalletStatusShape = {};
 

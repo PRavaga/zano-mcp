@@ -1,4 +1,6 @@
 import { TradeClient } from "../../clients/trade.js";
+import { WalletClient } from "../../clients/wallet.js";
+import { DaemonClient } from "../../clients/daemon.js";
 import type {
   GetTradingPairInput,
   GetOrderBookInput,
@@ -22,9 +24,13 @@ function errorResult(error: unknown): ToolResult {
 
 export class TradeHandlers {
   private client: TradeClient;
+  private walletClient?: WalletClient;
+  private daemonClient?: DaemonClient;
 
-  constructor(client: TradeClient) {
+  constructor(client: TradeClient, walletClient?: WalletClient, daemonClient?: DaemonClient) {
     this.client = client;
+    this.walletClient = walletClient;
+    this.daemonClient = daemonClient;
   }
 
   async getTradingPair(input: GetTradingPairInput): Promise<ToolResult> {
@@ -105,21 +111,67 @@ export class TradeHandlers {
 
   async dexAuthenticate(input: DexAuthenticateInput): Promise<ToolResult> {
     try {
+      if (!this.walletClient) {
+        throw new Error("Wallet RPC not configured. Set ZANO_WALLET_URL to enable auto-auth.");
+      }
+
+      // Step 1: Get address from wallet (or use provided)
+      let address = input.address;
+      if (!address) {
+        const addrResult = await this.walletClient.call<{ address: string }>("getaddress");
+        address = addrResult.address;
+      }
+
+      // Step 2: Get alias from daemon (or use provided)
+      // Note: get_alias_by_address requires raw string param, not object
+      let alias = input.alias;
+      if (!alias && this.daemonClient) {
+        try {
+          const res = await fetch(this.daemonClient.url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              jsonrpc: "2.0", id: 0,
+              method: "get_alias_by_address",
+              params: address,
+            }),
+          });
+          const json = await res.json() as any;
+          alias = json?.result?.alias_info_list?.[0]?.alias || "";
+        } catch {
+          alias = "";
+        }
+      }
+
+      // Step 3: Request auth message from Trade API
+      const message = await this.client.post<string>(
+        "/api/auth/request-auth",
+        { address, alias: alias || "" },
+      );
+
+      // Step 4: Sign the message with wallet
+      const signResult = await this.walletClient.call<{ sig: string; pkey: string }>(
+        "sign_message",
+        { buff: Buffer.from(message).toString("base64") },
+      );
+
+      // Step 5: Authenticate with Trade API
       const data = await this.client.post<Record<string, unknown>>(
         "/api/auth",
         {
           data: {
-            address: input.address,
-            alias: input.alias || "",
-            message: input.message,
-            signature: input.signature,
+            address,
+            alias: alias || "",
+            message,
+            signature: signResult.sig,
           },
           neverExpires: true,
         },
       );
+
       if (data && typeof data === "string") {
         this.client.setToken(data);
-        return textResult(`Authenticated with Trade API. Token stored.`);
+        return textResult(`Authenticated with Trade API as "${alias || address.slice(0, 12) + "..."}". Token stored.`);
       }
       return textResult(`Authentication response: ${JSON.stringify(data)}`);
     } catch (e) {

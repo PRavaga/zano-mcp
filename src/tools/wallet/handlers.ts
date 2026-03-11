@@ -11,6 +11,7 @@ import {
 } from "../../utils/formatting.js";
 import { ZANO_ASSET_ID, ZANO_DECIMALS, DEFAULT_FEE, DEFAULT_MIXIN } from "../../utils/constants.js";
 import type {
+  GetBalanceInput,
   TransferInput,
   GetRecentTransactionsInput,
   SearchTransactionsInput,
@@ -39,7 +40,7 @@ export class WalletHandlers {
     this.daemon = daemon;
   }
 
-  async getBalance(): Promise<ToolResult> {
+  async getBalance(input: GetBalanceInput): Promise<ToolResult> {
     try {
       const res = await this.client.call<Record<string, unknown>>("getbalance");
       const lines = ["Wallet Balance:"];
@@ -51,16 +52,31 @@ export class WalletHandlers {
       const balances = res.balances as Array<Record<string, unknown>> | undefined;
       if (balances && balances.length > 0) {
         for (const b of balances) {
-          const assetId = String(b.asset_id || "");
-          if (assetId === ZANO_ASSET_ID) continue;
           const assetInfo = (b.asset_info as Record<string, unknown>) || {};
+          const assetId = String((assetInfo as Record<string, unknown>).asset_id || b.asset_id || "");
           const ticker = String(assetInfo.ticker || assetId.slice(0, 8));
           const decimals = Number(assetInfo.decimal_point ?? 12);
-          registerAsset(assetId, ticker, decimals);
+          if (assetId !== ZANO_ASSET_ID) {
+            registerAsset(assetId, ticker, decimals);
+          }
 
-          const bal = BigInt(String(b.balance || 0));
-          const ubal = BigInt(String(b.unlocked || 0));
-          lines.push(`  ${ticker}: ${atomicToHuman(ubal, decimals)} (locked: ${atomicToHuman(bal - ubal, decimals)})`);
+          const total = BigInt(String(b.total || b.balance || 0));
+          const unlocked = BigInt(String(b.unlocked || 0));
+          const lockedStr = `(locked: ${atomicToHuman(total - unlocked, decimals)})`;
+
+          let line = `  ${ticker}: ${atomicToHuman(unlocked, decimals)} ${lockedStr}`;
+          if (input.detailed) {
+            const outsCount = Number(b.outs_count ?? 0);
+            const outsMax = BigInt(String(b.outs_amount_max || 0));
+            const outsMin = BigInt(String(b.outs_amount_min || 0));
+            line += ` | outputs: ${outsCount}, max: ${atomicToHuman(outsMax, decimals)}, min: ${atomicToHuman(outsMin, decimals)}`;
+          }
+
+          if (assetId === ZANO_ASSET_ID) {
+            lines[1] = line;
+          } else {
+            lines.push(line);
+          }
         }
       }
 

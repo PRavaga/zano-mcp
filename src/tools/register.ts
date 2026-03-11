@@ -32,7 +32,9 @@ export function registerAllTools(server: McpServer, config: Config): void {
   }
 
   const tradeClient = new TradeClient(config.tradeUrl, config.tradeToken);
-  registerTradeTools(server, new TradeHandlers(tradeClient), !!config.tradeToken, enableWrite);
+  const tradeWalletClient = config.walletUrl ? new WalletClient(config.walletUrl, config.walletAuth) : undefined;
+  const hasTradeAuth = !!config.tradeToken || !!config.walletUrl;
+  registerTradeTools(server, new TradeHandlers(tradeClient, tradeWalletClient, daemonClient), hasTradeAuth, enableWrite);
   logger.info("Trade tools registered");
 
   if (enableWrite) {
@@ -159,7 +161,7 @@ function registerDaemonTools(server: McpServer, client: DaemonClient): void {
 
 function registerWalletTools(server: McpServer, h: WalletHandlers, enableWrite: boolean): void {
   // Read-only tools (always registered)
-  server.tool("get_balance", "Get wallet balance for all assets", walletDefs.GetBalanceShape, async () => h.getBalance());
+  server.tool("get_balance", "Get wallet balance for all assets", walletDefs.GetBalanceShape, async (args: any) => h.getBalance(args));
   server.tool("get_address", "Get wallet public address", walletDefs.GetAddressShape, async () => h.getAddress());
   server.tool("get_wallet_status", "Get wallet sync status and info", walletDefs.GetWalletStatusShape, async () => h.getWalletStatus());
   server.tool("get_recent_transactions", "Get recent wallet transactions", walletDefs.GetRecentTransactionsShape, async (args: any) => h.getRecentTransactions(args));
