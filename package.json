@@ -1,6 +1,6 @@
 {
   "name": "zano-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "MCP server for Zano blockchain - daemon, wallet, asset, swap, and trade tools",
   "type": "module",
   "bin": {

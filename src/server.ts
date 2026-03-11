@@ -8,7 +8,7 @@ import { logger } from "./logger.js";
 export function createServer(config: Config): McpServer {
   const server = new McpServer({
     name: "zano-mcp",
-    version: "0.1.0",
+    version: "0.1.2",
   });
 
   registerAllTools(server, config);
