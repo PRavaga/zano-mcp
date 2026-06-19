@@ -1,0 +1,15 @@
+{
+  "scan": { "roots": ["src"], "extensions": [".ts", ".tsx"] },
+  "forbid": [
+    {
+      "label": "No dynamic code execution (eval)",
+      "pattern": "\\beval\\(",
+      "advice": "eval() on any input that can reach a request is RCE. Parse/validate instead."
+    },
+    {
+      "label": "No dynamic code execution (new Function)",
+      "pattern": "new Function\\(",
+      "advice": "Build logic explicitly rather than constructing functions from strings."
+    }
+  ]
+}
