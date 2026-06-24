@@ -10,7 +10,9 @@ export class DaemonClient {
 
   async call<T = unknown>(
     method: string,
-    params: Record<string, unknown> = {},
+    // Most methods take an object; a few (e.g. get_alias_by_address) take a
+    // raw string param. Accept either so callers don't hand-roll fetch.
+    params: unknown = {},
   ): Promise<T> {
     const body = JSON.stringify({
       jsonrpc: "2.0",

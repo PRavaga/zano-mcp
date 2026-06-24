@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Config } from "../config.js";
-import { ASSET_WHITELIST_URLS, PUBLIC_NODES, DEFAULT_PORTS } from "../utils/constants.js";
+import { ASSET_WHITELIST_URLS, PUBLIC_NODES, DEFAULT_PORTS, REQUEST_TIMEOUT } from "../utils/constants.js";
 import { logger } from "../logger.js";
 
 export function registerResources(server: McpServer, config: Config): void {
@@ -43,8 +43,20 @@ export function registerResources(server: McpServer, config: Config): void {
     async () => {
       try {
         const url = ASSET_WHITELIST_URLS[config.network];
-        const res = await fetch(url);
-        const data = await res.text();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+        let data: string;
+        try {
+          const res = await fetch(url, {
+            redirect: "error",
+            signal: controller.signal,
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          data = await res.text();
+          JSON.parse(data); // validate well-formed JSON before returning it as trusted
+        } finally {
+          clearTimeout(timeoutId);
+        }
         return {
           contents: [
             {
