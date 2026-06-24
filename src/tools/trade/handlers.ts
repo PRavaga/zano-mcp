@@ -123,21 +123,17 @@ export class TradeHandlers {
       }
 
       // Step 2: Get alias from daemon (or use provided)
-      // Note: get_alias_by_address requires raw string param, not object
+      // get_alias_by_address takes a raw string param. Route it through
+      // DaemonClient.call so it inherits redirect:"error" and the request
+      // timeout — a remote http node must not be able to redirect this lookup
+      // to an attacker host or hang it.
       let alias = input.alias;
       if (!alias && this.daemonClient) {
         try {
-          const res = await fetch(this.daemonClient.url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              jsonrpc: "2.0", id: 0,
-              method: "get_alias_by_address",
-              params: address,
-            }),
-          });
-          const json = await res.json() as any;
-          alias = json?.result?.alias_info_list?.[0]?.alias || "";
+          const res = await this.daemonClient.call<{
+            alias_info_list?: Array<{ alias: string }>;
+          }>("get_alias_by_address", address);
+          alias = res?.alias_info_list?.[0]?.alias || "";
         } catch {
           alias = "";
         }
