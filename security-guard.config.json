@@ -10,6 +10,28 @@
       "label": "No dynamic code execution (new Function)",
       "pattern": "new Function\\(",
       "advice": "Build logic explicitly rather than constructing functions from strings."
+    },
+    {
+      "label": "Wallet RPC auth must not return the raw configured secret",
+      "pattern": "return\\s+this\\.auth\\b",
+      "advice": "generateAccessToken must build a signed JWT (createHmac over body_hash+salt+exp); never return ZANO_WALLET_AUTH verbatim as the header."
+    },
+    {
+      "label": "Daemon RPC must go through DaemonClient.call, not a bare fetch (SSRF)",
+      "pattern": "fetch\\(\\s*this\\.daemonClient\\.url",
+      "advice": "Route daemon RPC through DaemonClient.call so redirect:\"error\" and the timeout are preserved; a remote http node must not be able to redirect or hang it."
+    }
+  ],
+  "require": [
+    {
+      "label": "Wallet RPC access token is HMAC-signed (not the raw secret)",
+      "file": "src/clients/wallet.ts",
+      "pattern": "createHmac"
+    },
+    {
+      "label": "dexAuthenticate alias lookup routes through DaemonClient.call",
+      "file": "src/tools/trade/handlers.ts",
+      "pattern": "daemonClient\\.call"
     }
   ]
 }
