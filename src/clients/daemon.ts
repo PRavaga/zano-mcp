@@ -1,5 +1,6 @@
 import { logger } from "../logger.js";
 import { REQUEST_TIMEOUT } from "../utils/constants.js";
+import { parseJsonLossless } from "../utils/json.js";
 
 export class DaemonClient {
   readonly url: string;
@@ -39,10 +40,12 @@ export class DaemonClient {
         throw new Error(`Daemon RPC HTTP ${res.status}: ${res.statusText}`);
       }
 
-      const json = (await res.json()) as {
+      // parseJsonLossless: uint64 values above 2^53 arrive as decimal strings
+      // instead of silently rounded numbers (res.json() would corrupt them)
+      const json = parseJsonLossless<{
         result?: T;
         error?: { code: number; message: string };
-      };
+      }>(await res.text());
 
       if (json.error) {
         throw new Error(
