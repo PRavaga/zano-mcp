@@ -6,6 +6,10 @@
   "bin": {
     "zano-mcp": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "CHANGELOG.md"
+  ],
   "main": "./dist/index.js",
   "scripts": {
     "build": "tsc",
