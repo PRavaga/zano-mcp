@@ -107,12 +107,12 @@ Tools are conditionally registered based on what's configured:
 | `get_balance` | Wallet balance (all assets, human-readable) |
 | `get_address` | Wallet public address |
 | `get_wallet_status` | Sync status, watch-only flag |
-| `transfer` | Send ZANO or assets (human-readable amounts) |
+| `transfer` | Send ZANO or assets (human-readable amounts, HF6 intrinsic payment ids) |
 | `get_recent_transactions` | Recent transaction history |
 | `search_transactions` | Search by various criteria |
 | `sign_message` | Sign arbitrary data |
 | `save_wallet` | Persist wallet state |
-| `make_integrated_address` | Create with payment ID |
+| `make_integrated_address` | Create with payment ID (max 8 bytes since HF6) |
 | `split_integrated_address` | Decode integrated address |
 | `get_mining_history` | PoS staking rewards |
 | `sweep_below` | Consolidate small outputs |
@@ -178,8 +178,25 @@ Tools are conditionally registered based on what's configured:
 
 - Node.js >= 18
 - A running Zano daemon (local or public node)
-- Wallet RPC running if you want wallet/asset/swap tools
+- Wallet RPC running if you want wallet/asset/swap tools — **Zano >= 2.2.1.501 (HF6)**
 - Trade API token if you want authenticated DEX operations
+
+## HF6 payment ids
+
+Since Zano hard fork 6 (mainnet height 3,833,000), payment ids are *intrinsic
+per-destination* values, max 8 bytes. The `transfer` tool takes the usual hex
+payment id and delivers it in the HF6 form; the old tx-wide field is rejected
+by 2.2.x wallets. Notes:
+
+- Payment ids must be 1–8 bytes of hex (2–16 hex chars) and non-zero — zero is
+  the on-chain sentinel for "no payment id" and would be dropped silently.
+- The recipient's wallet reports the pid in its canonical 8-byte form (the
+  tool's output shows it), e.g. `41` arrives as `0000000000000041`.
+- Before the first pid-bearing transfer, the server probes the wallet with a
+  harmless 2.2.x-only RPC and refuses if the wallet is older: a pre-HF6 wallet
+  would silently send the transfer *without* the payment id.
+- Integrated addresses keep working unchanged (the embedded pid becomes
+  intrinsic automatically at spend time).
 
 ## Development
 
