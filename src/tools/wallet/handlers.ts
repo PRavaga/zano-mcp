@@ -10,6 +10,11 @@ import {
   registerAsset,
 } from "../../utils/formatting.js";
 import { ZANO_ASSET_ID, ZANO_DECIMALS, DEFAULT_FEE, DEFAULT_MIXIN } from "../../utils/constants.js";
+import {
+  canonicalPaymentIdHex,
+  normalizeOptionalHex,
+  paymentIdHexToUint64,
+} from "../../utils/payment-id.js";
 import type {
   GetBalanceInput,
   TransferInput,
@@ -114,6 +119,33 @@ export class WalletHandlers {
     }
   }
 
+  // Resolved once per process: does the wallet speak 2.2.x RPC? A pre-HF6
+  // (2.1.x) wallet ignores the unknown destinations[].payment_id member and
+  // sends the transfer WITHOUT a payment id — funds move but the recipient
+  // (e.g. an exchange) can't credit them. Probing a 2.2.x-only read RPC and
+  // failing closed prevents that silent loss.
+  private hf6WalletProbe: Promise<void> | null = null;
+
+  private ensureHf6CapableWallet(): Promise<void> {
+    if (!this.hf6WalletProbe) {
+      this.hf6WalletProbe = this.client.call("get_utxo_stats", {}).then(
+        () => undefined,
+        (e: unknown) => {
+          this.hf6WalletProbe = null; // don't cache failures; retry next time
+          const msg = e instanceof Error ? e.message : String(e);
+          if (/method not found|-32601/i.test(msg)) {
+            throw new Error(
+              "Wallet does not support HF6 intrinsic payment ids (Zano >= 2.2.1.501 required). " +
+                "Refusing to send: an older wallet would silently drop the payment id.",
+            );
+          }
+          throw e;
+        },
+      );
+    }
+    return this.hf6WalletProbe;
+  }
+
   async transfer(input: TransferInput): Promise<ToolResult> {
     try {
       const assetId = input.asset_id || ZANO_ASSET_ID;
@@ -123,12 +155,25 @@ export class WalletHandlers {
       const mixin = input.mixin ?? DEFAULT_MIXIN;
       const fee = input.fee ? humanToAtomic(input.fee, ZANO_DECIMALS) : String(DEFAULT_FEE);
 
+      const pidHex = normalizeOptionalHex(input.payment_id);
+      let pid: bigint | undefined;
+      if (pidHex !== undefined) {
+        pid = paymentIdHexToUint64(pidHex); // validates: hex, <= 8 bytes, non-zero
+        await this.ensureHf6CapableWallet();
+      }
+
       const dest: Record<string, unknown> = {
         address: input.address,
         amount: atomicAmount,
       };
       if (assetId !== ZANO_ASSET_ID) {
         dest.asset_id = assetId;
+      }
+      if (pid !== undefined) {
+        // HF6 intrinsic per-destination payment id. Sent as a decimal string:
+        // epee coerces JSON strings into uint64 fields via std::stoull, which
+        // keeps the full uint64 range (a JSON number would round above 2^53).
+        dest.payment_id = pid.toString();
       }
 
       const params: Record<string, unknown> = {
@@ -137,14 +182,21 @@ export class WalletHandlers {
         mixin,
       };
 
-      if (input.payment_id) params.payment_id = input.payment_id;
       if (input.comment) params.comment = input.comment;
 
       const res = await this.client.call<Record<string, unknown>>("transfer", params);
       const ticker = info?.ticker || "ZANO";
-      return textResult(
-        `Transfer sent: ${input.amount} ${ticker} to ${input.address}\nTX hash: ${res.tx_hash}\nTX size: ${res.tx_size || "N/A"} bytes`,
-      );
+      const lines = [
+        `Transfer sent: ${input.amount} ${ticker} to ${input.address}`,
+        `TX hash: ${res.tx_hash}`,
+        `TX size: ${res.tx_size || "N/A"} bytes`,
+      ];
+      if (pid !== undefined) {
+        lines.push(
+          `Payment ID: ${pidHex} (canonical 8-byte form: ${canonicalPaymentIdHex(pid)})`,
+        );
+      }
+      return textResult(lines.join("\n"));
     } catch (e) {
       return errorResult(e);
     }
@@ -210,7 +262,13 @@ export class WalletHandlers {
   async makeIntegratedAddress(input: MakeIntegratedAddressInput): Promise<ToolResult> {
     try {
       const params: Record<string, unknown> = {};
-      if (input.payment_id) params.payment_id = input.payment_id;
+      const pidHex = normalizeOptionalHex(input.payment_id);
+      if (pidHex !== undefined) {
+        // Same HF6 constraints as transfer (<= 8 bytes, non-zero): an all-zero
+        // embedded pid converts to intrinsic 0 at spend time and is dropped.
+        paymentIdHexToUint64(pidHex);
+        params.payment_id = pidHex;
+      }
       const res = await this.client.call<Record<string, unknown>>(
         "make_integrated_address",
         params,
