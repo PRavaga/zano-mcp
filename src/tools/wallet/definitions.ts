@@ -18,7 +18,12 @@ export const TransferShape = {
     .string()
     .optional()
     .describe("Asset ID to send. Omit for ZANO"),
-  payment_id: z.string().optional().describe("Payment ID (optional)"),
+  payment_id: z
+    .string()
+    .optional()
+    .describe(
+      "Hex payment ID, max 8 bytes / 16 hex chars, non-zero (e.g. exchange deposit ID). Sent as an HF6 intrinsic per-destination payment id; requires wallet >= 2.2.1.501 with HF6 active",
+    ),
   comment: z.string().optional().describe("Transaction comment (optional)"),
   fee: z
     .string()
@@ -56,7 +61,9 @@ export const MakeIntegratedAddressShape = {
   payment_id: z
     .string()
     .optional()
-    .describe("Payment ID (auto-generated if omitted)"),
+    .describe(
+      "Hex payment ID, max 8 bytes / 16 hex chars since HF6, non-zero (random 8 bytes generated if omitted)",
+    ),
 };
 
 export const SplitIntegratedAddressShape = {

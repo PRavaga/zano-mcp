@@ -6,6 +6,7 @@ import {
   formatHashrate,
   formatAssetAmount,
 } from "../../utils/formatting.js";
+import { assertRpcStatusOk } from "../../utils/rpc.js";
 import type {
   GetBlockByHeightInput,
   GetBlockByHashInput,
@@ -47,7 +48,7 @@ export class DaemonHandlers {
         `Zano Network Status`,
         `  Height: ${info.height}`,
         `  Network height: ${info.max_net_seen_height || "N/A"}`,
-        `  Difficulty: ${info.difficulty}`,
+        `  PoW difficulty: ${formatDifficulty(Number(info.pow_difficulty || 0))}`,
         `  PoS difficulty: ${info.pos_difficulty}`,
         `  Hashrate: ${info.current_network_hashrate_350 || info.current_network_hashrate_50 || "N/A"}`,
         `  Connections: ${info.outgoing_connections_count} out / ${info.incoming_connections_count} in`,
@@ -168,18 +169,35 @@ export class DaemonHandlers {
 
   async getPoolInfo(): Promise<ToolResult> {
     try {
-      const res = await this.client.call<Record<string, unknown>>("get_pool_info");
-      const lines = [
-        `Transaction Pool`,
-        `  Pool size: ${res.tx_count ?? "N/A"}`,
-      ];
-      if (Array.isArray(res.transactions)) {
-        for (const tx of res.transactions as Array<Record<string, unknown>>) {
-          lines.push(`  TX: ${tx.id} (size: ${tx.blob_size} bytes, fee: ${tx.fee ? formatZano(tx.fee as number) : "N/A"})`);
-        }
+      // get_pool_txs_brief_details with an empty ids list returns ALL pool
+      // txs; get_pool_info itself only carries pending alias registrations.
+      const res = await this.client.call<Record<string, unknown>>(
+        "get_pool_txs_brief_details",
+        { ids: [] },
+      );
+      assertRpcStatusOk(res, "get_pool_txs_brief_details");
+      const txs = (res.txs || []) as Array<Record<string, unknown>>;
+      const MAX_SHOWN = 20;
+      const lines = [`Transaction Pool`, `  Pool size: ${txs.length}`];
+      for (const tx of txs.slice(0, MAX_SHOWN)) {
+        lines.push(
+          `  TX: ${tx.id} (size: ${tx.sz} bytes, fee: ${tx.fee ? formatZano(tx.fee as number) : "N/A"})`,
+        );
       }
-      if (res.tx_count === 0 || (!res.transactions && !res.tx_count)) {
+      if (txs.length > MAX_SHOWN) {
+        lines.push(`  ... and ${txs.length - MAX_SHOWN} more`);
+      }
+      if (txs.length === 0) {
         lines.push("  (empty pool)");
+      }
+
+      const aliasRes = await this.client.call<Record<string, unknown>>("get_pool_info");
+      const aliases = (aliasRes.aliases_que || []) as Array<Record<string, unknown>>;
+      if (aliases.length > 0) {
+        lines.push(`  Pending alias registrations: ${aliases.length}`);
+        for (const a of aliases.slice(0, 10)) {
+          lines.push(`    @${a.alias}`);
+        }
       }
       return textResult(lines.join("\n"));
     } catch (e) {

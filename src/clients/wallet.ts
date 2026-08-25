@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { logger } from "../logger.js";
 import { REQUEST_TIMEOUT } from "../utils/constants.js";
+import { parseJsonLossless } from "../utils/json.js";
 
 export class WalletClient {
   private url: string;
@@ -48,10 +49,12 @@ export class WalletClient {
         throw new Error(`Wallet RPC HTTP ${res.status}: ${res.statusText}`);
       }
 
-      const json = (await res.json()) as {
+      // parseJsonLossless: uint64 values above 2^53 arrive as decimal strings
+      // instead of silently rounded numbers (res.json() would corrupt them)
+      const json = parseJsonLossless<{
         result?: T;
         error?: { code: number; message: string };
-      };
+      }>(await res.text());
 
       if (json.error) {
         throw new Error(
@@ -77,26 +80,29 @@ export class WalletClient {
     // request-bound JWT: body_hash = sha256(body), a random salt (replay
     // protection), and a short exp. Signed HMAC-SHA256 with the configured
     // secret (ZANO_WALLET_AUTH / --jwt-secret).
-    const b64url = (obj: object): string =>
-      Buffer.from(JSON.stringify(obj))
-        .toString("base64")
-        .replace(/=/g, "")
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_");
+    //
+    // Segments use STANDARD base64 (padding stripped), not base64url: the
+    // wallet decodes with jwt::alphabet::base64 (wallet_rpc_server.cpp), so
+    // "-"/"_" characters make verification fail. With base64url this failed
+    // intermittently — only when the encoded payload/signature happened to
+    // contain a "+" or "/".
+    const b64 = (data: Buffer): string =>
+      data.toString("base64").replace(/=/g, "");
+    const b64json = (obj: object): string =>
+      b64(Buffer.from(JSON.stringify(obj)));
 
-    const header = b64url({ alg: "HS256", typ: "JWT" });
-    const payload = b64url({
+    const header = b64json({ alg: "HS256", typ: "JWT" });
+    const payload = b64json({
       body_hash: createHash("sha256").update(httpBody).digest("hex"),
       user: "zano-mcp",
       salt: randomBytes(32).toString("hex"),
       exp: Math.floor(Date.now() / 1000) + 60,
     });
-    const signature = createHmac("sha256", this.auth ?? "")
-      .update(`${header}.${payload}`)
-      .digest("base64")
-      .replace(/=/g, "")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_");
+    const signature = b64(
+      createHmac("sha256", this.auth ?? "")
+        .update(`${header}.${payload}`)
+        .digest(),
+    );
 
     return `${header}.${payload}.${signature}`;
   }
