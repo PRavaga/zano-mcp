@@ -4,7 +4,7 @@
   "description": "MCP server for Zano blockchain - daemon, wallet, asset, swap, and trade tools",
   "type": "module",
   "bin": {
-    "zano-mcp": "./dist/index.js"
+    "zano-mcp": "dist/index.js"
   },
   "files": [
     "dist",
